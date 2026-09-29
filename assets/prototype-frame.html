@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>__PAGE_TITLE__</title>
+<style>
+  /* ============================================================
+     框架样式（固定，勿改）
+     ============================================================ */
+  * { box-sizing: border-box; }
+  :root{
+    --accent:#e5484d;
+    --front:#2563eb;
+    --back:#d97706;
+    --ink:#1a1d21;
+    --muted:#6b7280;
+    --line:#e5e7eb;
+    --bg:#f4f5f7;
+    --note-bg:#fdf6d8;
+    --note-line:#e8dcae;
+    --note-ink:#4a3f1e;
+    /* 布局钩子：内容区最大宽度。页面可在「页面功能自身样式」区块里按需覆盖
+       （宽表格、多列表单必须放宽），默认值不变以保持既有页面视觉。 */
+    --stage-max:760px;
+  }
+  html,body{height:100%;}
+  body{
+    margin:0; min-height:100vh;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    color:var(--ink);
+    background:radial-gradient(1200px 600px at 50% -10%,#fff 0%,transparent 60%),var(--bg);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* 原型内容区 */
+  .stage{
+    max-width:var(--stage-max);
+    margin:48px auto;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:48px;
+    box-shadow:0 1px 2px rgba(16,24,40,.04),0 12px 32px -8px rgba(16,24,40,.10);
+  }
+
+  /* 热区框选：与 .anno / #lines 一样用视口坐标系（position:fixed），
+     这样无论页面滚到哪里，红框都不会漂移 */
+  .hotspot{
+    position:fixed;
+    border:3px solid transparent;
+    border-radius:8px;
+    transition:border-color .14s,box-shadow .14s,opacity .14s;
+    pointer-events:none;
+    opacity:0;
+    z-index:2147483000;   /* 压过所有业务弹窗 */
+  }
+  .hotspot.active{
+    border-color:var(--accent);
+    box-shadow:0 0 0 4px rgba(229,72,77,.12),0 0 24px -4px rgba(229,72,77,.40);
+    opacity:1;
+  }
+
+  /* 引线层 */
+  #lines{
+    position:fixed; inset:0;
+    pointer-events:none;
+    z-index:2147483001;
+    overflow:visible;
+  }
+
+  /* 标注框：文档黄底 */
+  .anno{
+    position:fixed;
+    z-index:2147483002;
+    width:250px;
+    background:var(--note-bg);
+    border:1px solid var(--note-line);
+    border-radius:12px; overflow:hidden;
+    box-shadow:
+      0 1px 2px rgba(120,100,30,.10),
+      0 16px 40px -12px rgba(120,100,30,.35);
+    opacity:0; transform:translateY(6px) scale(.98);
+    transition:opacity .16s ease,transform .16s ease;
+    pointer-events:none;
+  }
+  .anno.show{opacity:1; transform:translateY(0) scale(1);}
+  .anno .head{
+    display:flex; align-items:center; gap:8px;
+    padding:12px 16px;
+    background:linear-gradient(180deg,#fef9e2,#fbf1c9);
+    border-bottom:1px solid var(--note-line);
+  }
+  .anno .dot{
+    width:8px;height:8px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 4px rgba(229,72,77,.16);flex:0 0 auto;
+  }
+  .anno h4{margin:0;font-size:13px;font-weight:700;color:#5a4a12;}
+  .anno .body{padding:10px 14px 14px;}
+  .anno .item{
+    display:flex;gap:8px;font-size:12.5px;line-height:1.55;padding:4px 0;
+    color:var(--note-ink);
+  }
+  .anno .item+.item{border-top:1px dashed rgba(180,160,90,.35);}
+  .anno .tag{
+    flex:0 0 auto;height:18px;padding:0 6px;border-radius:5px;
+    font-size:10.5px;font-weight:700;line-height:18px;margin-top:1px;
+  }
+  .anno .item.front .tag{color:#1d4ed8;background:rgba(37,99,235,.16);}
+  .anno .item.back .tag{color:#9a5b00;background:rgba(217,119,6,.20);}
+  .anno .item.front .txt{color:#3f3a1e;}
+  .anno .item.back  .txt{color:#5a4a12;}
+
+  /* 浮动开关 */
+  #toggle{
+    position:fixed; top:20px; right:20px;
+    z-index:2147483003;
+    display:inline-flex; align-items:center; gap:8px;
+    padding:9px 16px; font-size:13px; font-weight:600; color:var(--ink);
+    background:rgba(255,255,255,.88); backdrop-filter:blur(10px);
+    border:1px solid var(--line); border-radius:999px; cursor:pointer;
+    box-shadow:0 6px 18px -8px rgba(16,24,40,.25);
+    transition:box-shadow .15s,transform .12s;
+  }
+  #toggle:hover{box-shadow:0 10px 24px -8px rgba(16,24,40,.35);}
+  #toggle:active{transform:translateY(1px);}
+  #toggle .led{
+    width:8px;height:8px;border-radius:50%;background:#cbd5e1;
+    box-shadow:0 0 0 3px rgba(148,163,184,.18);
+    transition:background .15s,box-shadow .15s;
+  }
+  #toggle.on .led{
+    background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.20);
+  }
+
+  /* ============================================================
+     以下为页面功能自身样式（AI 生成时填充）
+     ============================================================ */
+  /* __STAGE_STYLES__ */
+</style>
+</head>
+<body>
+
+<button id="toggle"><span class="led"></span>标注已关闭</button>
+
+<div class="stage" id="stage">
+  <!-- __STAGE_CONTENT__ -->
+</div>
+
+<svg id="lines"></svg>
+<div class="anno" id="annoBox"></div>
+
+<script>
+/* ============================================================
+   热区配置（AI 生成时填充）
+   ============================================================ */
+const hotspots = [
+  /* __HOTSPOTS__ */
+];
+
+const annoBox = document.getElementById('annoBox');
+const svg = document.getElementById('lines');
+const toggle = document.getElementById('toggle');
+
+let enabled = false;
+const hotspotEls = {};
+let hovered = null;
+let frameNo = 0;
+
+/* 悬停判定不依赖 DOM 事件的目标元素，而是「指针坐标 + 矩形包含 + 遮挡校验」。
+   这样延迟注入的元素、被 innerHTML 换掉的元素、父层 pointer-events:none 的
+   控件、禁用态控件都能命中；被弹层遮住的控件则不会被误命中。
+   且指针不动时页面滚动 / 布局变化（展开折叠面板等）也会实时重判。 */
+const pointer = { x: -1, y: -1, active: false };
+
+/* ============================================================
+   1. 建热区元素
+   ============================================================ */
+hotspots.forEach(h => {
+  const el = document.createElement('div');
+  el.className = 'hotspot';
+  document.body.appendChild(el);
+  hotspotEls[h.id] = el;
+  h._el = el;
+});
+
+/* ============================================================
+   2. 目标解析：只缓存「仍挂在文档里」的引用，失效就按 selector 重查
+   ============================================================ */
+const ro = new ResizeObserver(() => repositionAll());
+
+function targetOf(h){
+  if (h._target && h._target.isConnected) return h._target;
+  h._target = null;
+  const missAt = typeof h._missAt === 'number' ? h._missAt : -999;
+  if (frameNo - missAt < 12) return null;   // 未命中时限频重试，避免每帧 querySelector
+  h._missAt = frameNo;
+  const t = document.querySelector(h.selector);
+  if (t) { h._target = t; ro.observe(t); }
+  return h._target;
+}
+
+function depthOf(el){
+  let d = 0, p = el;
+  while ((p = p.parentElement)) d++;
+  return d;
+}
+
+/* 指针下方的热区：先按矩形圈定候选，再用 elementFromPoint 排除被遮挡的，
+   最后对嵌套热区取最内层 */
+function pickAt(x, y){
+  const top = document.elementFromPoint(x, y);
+  let best = null, bestDepth = -1;
+
+  for (let i = 0; i < hotspots.length; i++){
+    const h = hotspots[i];
+    const t = targetOf(h);
+    if (!t) continue;
+    const r = t.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+    if (top && !(t.contains(top) || top.contains(t))) continue;
+    const d = depthOf(t);
+    if (d > bestDepth) { best = h; bestDepth = d; }
+  }
+  return best;
+}
+
+/* ============================================================
+   3. 统一重定位入口
+   ============================================================ */
+function repositionAll(){
+  hotspots.forEach(h => {
+    const t = targetOf(h);
+    const el = h._el;
+    if (!t) {
+      el.style.opacity = '0';
+      el._hidden = true;
+      return;
+    }
+    const r = t.getBoundingClientRect();
+
+    if (r.width === 0 && r.height === 0) {
+      el.style.opacity = '0';
+      el._hidden = true;
+      return;
+    }
+    el._hidden = false;
+    /* 目标重新可见时必须回清行内 opacity：
+       行内样式优先级高于 .hotspot.active{opacity:1}，不回清红框会永久不可见 */
+    if (el.style.opacity === '0') el.style.opacity = '';
+
+    el.style.left   = (r.left - 4) + 'px';
+    el.style.top    = (r.top  - 4) + 'px';
+    el.style.width  = (r.width  + 8) + 'px';
+    el.style.height = (r.height + 8) + 'px';
+  });
+
+  if (annoBox._current) {
+    const target = annoBox._current._target;
+    if (!target || !target.isConnected) { hide(); return; }
+    const r = target.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) { hide(); return; }
+    positionAnno(annoBox._current);
+    drawLine(annoBox._current);
+  }
+}
+
+/* ============================================================
+   4. 事件驱动
+   ============================================================ */
+window.addEventListener('resize', repositionAll);
+window.addEventListener('scroll', repositionAll, true);
+
+let _moPending = false;
+const mo = new MutationObserver(() => {
+  hotspots.forEach(h => { if (!h._target) h._missAt = -999; });   // DOM 变了，允许立刻重查
+  if (_moPending) return;
+  _moPending = true;
+  requestAnimationFrame(() => {
+    _moPending = false;
+    repositionAll();
+  });
+});
+mo.observe(document.body, {
+  childList: true,
+  subtree: true,
+  attributes: true,
+  attributeFilter: ['class', 'style', 'hidden', 'open']
+});
+
+document.addEventListener('pointermove', e => {
+  pointer.x = e.clientX; pointer.y = e.clientY; pointer.active = true;
+}, true);
+document.documentElement.addEventListener('mouseleave', () => { pointer.active = false; });
+document.addEventListener('pointercancel', () => { pointer.active = false; }, true);
+window.addEventListener('blur', () => { pointer.active = false; });
+
+/* body 上的 transform / filter / contain 会把叠加层的包含块从视口改到 body，
+   坐标系随之变化；这里一次性告警，避免静默错位 */
+(function warnContainingBlock(){
+  const keys = ['transform', 'filter', 'perspective', 'contain', 'willChange'];
+  const hit = keys.filter(k => {
+    const v = getComputedStyle(document.body)[k];
+    return v && v !== 'none' && v !== 'auto' && v !== 'normal';
+  });
+  if (hit.length) console.warn('标注框架告警：body 上的 ' + hit.join(' / ') + ' 会成为叠加层的包含块，标注可能错位');
+})();
+
+/* ============================================================
+   5. 逐帧重定位 + 悬停重判（兜底：动画、过渡、指针不动时的滚动与布局变化）
+   ============================================================ */
+let _lastKey = '';
+function tick(){
+  frameNo++;
+
+  /* 跑满约 2 秒仍未命中的 selector 一次性告警：
+     延迟注入的元素会在这里之前被解析到，所以告警留下的就是真拼错的 selector */
+  if (frameNo === 120) {
+    hotspots.forEach(h => {
+      if (!h._target) console.warn('热区 selector 未命中：', h.selector);
+    });
+  }
+
+  let key = '';
+  for (let i = 0; i < hotspots.length; i++){
+    const t = targetOf(hotspots[i]);
+    if (!t) { key += '-|'; continue; }
+    const r = t.getBoundingClientRect();
+    key += Math.round(r.left) + ',' + Math.round(r.top) + ','
+         + Math.round(r.width) + ',' + Math.round(r.height) + '|';
+  }
+  if (key !== _lastKey) {
+    _lastKey = key;
+    repositionAll();
+  }
+
+  reconcileHover();
+  requestAnimationFrame(tick);
+}
+
+function reconcileHover(){
+  if (!enabled) return;
+  const h = pointer.active ? pickAt(pointer.x, pointer.y) : null;
+  if (h === hovered) return;
+  hovered = h;
+  if (h) show(h, h._el);
+  else hide();
+}
+
+requestAnimationFrame(tick);
+
+/* ============================================================
+   6. 显示 / 隐藏
+   ============================================================ */
+function show(h, el){
+  Object.values(hotspotEls).forEach(e => e.classList.remove('active'));
+  if (el.style.opacity === '0') el.style.opacity = '';
+  el.classList.add('active');
+
+  annoBox.innerHTML =
+    `<div class="head"><span class="dot"></span><h4>${h.title || ''}</h4></div>
+     <div class="body">` +
+     (h.items || []).map(it =>
+       `<div class="item ${it.type}">` +
+          `<span class="tag">${it.type==='back'?'后端':'前端'}</span>` +
+          `<span class="txt">${it.text || ''}</span>` +
+        `</div>`).join('') +
+     `</div>`;
+
+  annoBox.classList.add('show');
+  annoBox._current = h;
+
+  positionAnno(h);
+  requestAnimationFrame(() => drawLine(h));
+}
+
+function hide(){
+  hovered = null;
+  annoBox.classList.remove('show');
+  Object.values(hotspotEls).forEach(e => e.classList.remove('active'));
+  svg.innerHTML = '';
+  annoBox._current = null;
+}
+
+/* ============================================================
+   7. 标注框定位（自动避让视口）
+   ============================================================ */
+function positionAnno(h){
+  const r = h._el.getBoundingClientRect();
+  const gap = 28, pad = 16;
+  const w = annoBox.offsetWidth;
+  const ht = annoBox.offsetHeight;
+
+  let x, y, side;
+  if (r.right + gap + w <= innerWidth - pad) {
+    side = 'right';
+    x = r.right + gap;
+    y = r.top + r.height/2 - ht/2;
+  } else if (r.left - gap - w >= pad) {
+    side = 'left';
+    x = r.left - gap - w;
+    y = r.top + r.height/2 - ht/2;
+  } else {
+    side = 'bottom';
+    x = r.left + r.width/2 - w/2;
+    y = r.bottom + gap;
+  }
+
+  x = Math.max(pad, Math.min(x, innerWidth  - w  - pad));
+  y = Math.max(pad, Math.min(y, innerHeight - ht - pad));
+
+  annoBox.style.left = x + 'px';
+  annoBox.style.top  = y + 'px';
+  annoBox._rect = { x, y, w, h: ht, side };
+}
+
+/* ============================================================
+   8. 引线绘制
+   ============================================================ */
+function drawLine(h){
+  const r = h._el.getBoundingClientRect();
+  const a = annoBox._rect;
+  if (!a) return;
+  const ns = 'http://www.w3.org/2000/svg';
+
+  let p1, p2;
+  if (a.side === 'right') {
+    p1 = { x: r.right, y: r.top + r.height/2 };
+    p2 = { x: a.x,     y: a.y + a.h/2 };
+  } else if (a.side === 'left') {
+    p1 = { x: r.left,    y: r.top + r.height/2 };
+    p2 = { x: a.x + a.w, y: a.y + a.h/2 };
+  } else {
+    p1 = { x: r.left + r.width/2, y: r.bottom };
+    p2 = { x: a.x + a.w/2,        y: a.y };
+  }
+
+  let d;
+  if (a.side === 'bottom') {
+    const midY = (p1.y + p2.y) / 2;
+    d = `M ${p1.x} ${p1.y} L ${p1.x} ${midY} L ${p2.x} ${midY} L ${p2.x} ${p2.y}`;
+  } else {
+    const midX = (p1.x + p2.x) / 2;
+    d = `M ${p1.x} ${p1.y} L ${midX} ${p1.y} L ${midX} ${p2.y} L ${p2.x} ${p2.y}`;
+  }
+
+  const defs = document.createElementNS(ns,'defs');
+  defs.innerHTML = `<linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#e5484d" stop-opacity="0.35"/>
+    <stop offset="100%" stop-color="#e5484d" stop-opacity="1"/></linearGradient>`;
+
+  const path = document.createElementNS(ns,'path');
+  path.setAttribute('d', d);
+  path.setAttribute('stroke','url(#lg)');
+  path.setAttribute('stroke-width','1.75');
+  path.setAttribute('fill','none');
+  path.setAttribute('stroke-linejoin','round');
+  path.setAttribute('stroke-linecap','round');
+
+  const halo = document.createElementNS(ns,'circle');
+  halo.setAttribute('cx',p1.x); halo.setAttribute('cy',p1.y); halo.setAttribute('r','8');
+  halo.setAttribute('fill','rgba(229,72,77,.15)');
+
+  const dot = document.createElementNS(ns,'circle');
+  dot.setAttribute('cx',p1.x); dot.setAttribute('cy',p1.y); dot.setAttribute('r','4');
+  dot.setAttribute('fill','#e5484d'); dot.setAttribute('stroke','#fff'); dot.setAttribute('stroke-width','1.5');
+
+  const dot2 = document.createElementNS(ns,'circle');
+  dot2.setAttribute('cx',p2.x); dot2.setAttribute('cy',p2.y); dot2.setAttribute('r','3');
+  dot2.setAttribute('fill','#e5484d');
+
+  svg.innerHTML = '';
+  [defs,path,halo,dot,dot2].forEach(n => svg.appendChild(n));
+
+  if (!h._drawn) {
+    const len = path.getTotalLength();
+    path.style.strokeDasharray = len;
+    path.style.strokeDashoffset = len;
+    path.getBoundingClientRect();
+    path.style.transition = 'stroke-dashoffset .28s ease';
+    path.style.strokeDashoffset = 0;
+    h._drawn = true;
+  }
+}
+
+/* ============================================================
+   9. 开关
+   ============================================================ */
+toggle.addEventListener('click', () => {
+  enabled = !enabled;
+  toggle.classList.toggle('on', enabled);
+  toggle.lastChild.textContent = enabled ? '标注已开启' : '标注已关闭';
+  if (!enabled) hide();
+});
+</script>
+</body>
+</html>

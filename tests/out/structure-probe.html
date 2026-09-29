@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>框架结构探针页</title>
+<style>
+  /* ============================================================
+     框架样式（固定，勿改）
+     ============================================================ */
+  * { box-sizing: border-box; }
+  :root{
+    --accent:#e5484d;
+    --front:#2563eb;
+    --back:#d97706;
+    --ink:#1a1d21;
+    --muted:#6b7280;
+    --line:#e5e7eb;
+    --bg:#f4f5f7;
+    --note-bg:#fdf6d8;
+    --note-line:#e8dcae;
+    --note-ink:#4a3f1e;
+    /* 布局钩子：内容区最大宽度。页面可在「页面功能自身样式」区块里按需覆盖
+       （宽表格、多列表单必须放宽），默认值不变以保持既有页面视觉。 */
+    --stage-max:760px;
+  }
+  html,body{height:100%;}
+  body{
+    margin:0; min-height:100vh;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    color:var(--ink);
+    background:radial-gradient(1200px 600px at 50% -10%,#fff 0%,transparent 60%),var(--bg);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* 原型内容区 */
+  .stage{
+    max-width:var(--stage-max);
+    margin:48px auto;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:48px;
+    box-shadow:0 1px 2px rgba(16,24,40,.04),0 12px 32px -8px rgba(16,24,40,.10);
+  }
+
+  /* 热区框选：与 .anno / #lines 一样用视口坐标系（position:fixed），
+     这样无论页面滚到哪里，红框都不会漂移 */
+  .hotspot{
+    position:fixed;
+    border:3px solid transparent;
+    border-radius:8px;
+    transition:border-color .14s,box-shadow .14s,opacity .14s;
+    pointer-events:none;
+    opacity:0;
+    z-index:2147483000;   /* 压过所有业务弹窗 */
+  }
+  .hotspot.active{
+    border-color:var(--accent);
+    box-shadow:0 0 0 4px rgba(229,72,77,.12),0 0 24px -4px rgba(229,72,77,.40);
+    opacity:1;
+  }
+
+  /* 引线层 */
+  #lines{
+    position:fixed; inset:0;
+    pointer-events:none;
+    z-index:2147483001;
+    overflow:visible;
+  }
+
+  /* 标注框：文档黄底 */
+  .anno{
+    position:fixed;
+    z-index:2147483002;
+    width:250px;
+    background:var(--note-bg);
+    border:1px solid var(--note-line);
+    border-radius:12px; overflow:hidden;
+    box-shadow:
+      0 1px 2px rgba(120,100,30,.10),
+      0 16px 40px -12px rgba(120,100,30,.35);
+    opacity:0; transform:translateY(6px) scale(.98);
+    transition:opacity .16s ease,transform .16s ease;
+    pointer-events:none;
+  }
+  .anno.show{opacity:1; transform:translateY(0) scale(1);}
+  .anno .head{
+    display:flex; align-items:center; gap:8px;
+    padding:12px 16px;
+    background:linear-gradient(180deg,#fef9e2,#fbf1c9);
+    border-bottom:1px solid var(--note-line);
+  }
+  .anno .dot{
+    width:8px;height:8px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 4px rgba(229,72,77,.16);flex:0 0 auto;
+  }
+  .anno h4{margin:0;font-size:13px;font-weight:700;color:#5a4a12;}
+  .anno .body{padding:10px 14px 14px;}
+  .anno .item{
+    display:flex;gap:8px;font-size:12.5px;line-height:1.55;padding:4px 0;
+    color:var(--note-ink);
+  }
+  .anno .item+.item{border-top:1px dashed rgba(180,160,90,.35);}
+  .anno .tag{
+    flex:0 0 auto;height:18px;padding:0 6px;border-radius:5px;
+    font-size:10.5px;font-weight:700;line-height:18px;margin-top:1px;
+  }
+  .anno .item.front .tag{color:#1d4ed8;background:rgba(37,99,235,.16);}
+  .anno .item.back .tag{color:#9a5b00;background:rgba(217,119,6,.20);}
+  .anno .item.front .txt{color:#3f3a1e;}
+  .anno .item.back  .txt{color:#5a4a12;}
+
+  /* 浮动开关 */
+  #toggle{
+    position:fixed; top:20px; right:20px;
+    z-index:2147483003;
+    display:inline-flex; align-items:center; gap:8px;
+    padding:9px 16px; font-size:13px; font-weight:600; color:var(--ink);
+    background:rgba(255,255,255,.88); backdrop-filter:blur(10px);
+    border:1px solid var(--line); border-radius:999px; cursor:pointer;
+    box-shadow:0 6px 18px -8px rgba(16,24,40,.25);
+    transition:box-shadow .15s,transform .12s;
+  }
+  #toggle:hover{box-shadow:0 10px 24px -8px rgba(16,24,40,.35);}
+  #toggle:active{transform:translateY(1px);}
+  #toggle .led{
+    width:8px;height:8px;border-radius:50%;background:#cbd5e1;
+    box-shadow:0 0 0 3px rgba(148,163,184,.18);
+    transition:background .15s,box-shadow .15s;
+  }
+  #toggle.on .led{
+    background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.20);
+  }
+
+  /* ============================================================
+     以下为页面功能自身样式（AI 生成时填充）
+     ============================================================ */
+  /* 探针刻意把内容区放宽到 1100px：用来验证 --stage-max 布局钩子真的生效，
+     而不是只验证它的默认值。断言在 run.mjs 里。 */
+  :root{--stage-max:1100px;}
+  h1{font-size:22px;margin:0 0 6px;}
+  .lead{margin:0 0 24px;font-size:13px;color:var(--muted);}
+  section{margin:0 0 56px;}
+  .c{margin:0 0 10px;font-size:11.5px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--muted);}
+  .spacer{height:1100px;}
+  .btn{appearance:none;font:inherit;font-size:13px;font-weight:600;padding:12px 18px;border-radius:9px;
+    border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;}
+  .btn.ghost{background:#fff;color:var(--ink);border-color:var(--line);}
+  .btn.tiny{padding:6px 10px;font-size:11.5px;border-radius:6px;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .text-input{font:inherit;font-size:13px;padding:11px 13px;border:1px solid var(--line);
+    border-radius:9px;outline:none;width:100%;}
+  .field{display:flex;flex-direction:column;gap:7px;margin:14px 0;}
+  .field label{font-size:12px;font-weight:600;color:var(--muted);}
+  .scroller{height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:0 14px 14px;}
+  .scroller .row{height:60px;display:flex;align-items:center;font-size:12px;color:var(--muted);
+    border-bottom:1px dashed var(--line);}
+  .tablewrap{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;}
+  table.grid{border-collapse:collapse;width:100%;font-size:12.5px;}
+  table.grid th{position:sticky;top:0;background:#f7f8fa;text-align:left;font-size:11.5px;
+    color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--line);}
+  table.grid td{padding:7px 12px;border-bottom:1px solid #f0f1f4;}
+  .card{border:1px solid var(--line);border-radius:12px;padding:18px;background:#fff;}
+  .card h3{margin:0 0 8px;font-size:15px;}
+  .card p{margin:0;font-size:12.5px;color:var(--muted);}
+  .pe-none{pointer-events:none;opacity:.6;display:inline-block;}
+  .drawer{position:fixed;top:0;right:0;z-index:9999;width:340px;height:100vh;background:#fff;
+    border-left:1px solid var(--line);padding:18px;transform:translateX(103%);visibility:hidden;
+    transition:transform .28s,visibility .28s;}
+  .drawer.open{transform:translateX(0);visibility:visible;}
+  .modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10000;width:360px;
+    background:#fff;border-radius:14px;padding:20px;display:none;box-shadow:0 24px 70px -20px rgba(16,24,40,.5);}
+  .modal.open{display:block;}
+  .mask{position:fixed;inset:0;z-index:9998;background:rgba(17,20,24,.42);display:none;}
+  .mask.open{display:block;}
+  .collapse{border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .collapse-head{display:block;width:100%;text-align:left;font:inherit;font-size:13px;font-weight:600;
+    padding:14px;background:#fff;border:0;cursor:pointer;}
+  .collapse-panel{display:none;padding:16px;border-top:1px solid var(--line);background:#fbfbfc;}
+  .collapse.open .collapse-panel{display:block;}
+  .fab{position:fixed;right:28px;bottom:28px;z-index:9000;}
+</style>
+</head>
+<body>
+
+<button id="toggle"><span class="led"></span>标注已关闭</button>
+
+<div class="stage" id="stage">
+  <h1>框架结构探针页</h1>
+  <p class="lead">每个热区的标注标题就是它的 case 名，探针按标题判定命中了哪一个。此页由 tests/ 自动生成，请勿手改。</p>
+
+  <section>
+    <p class="c">case:flow — 普通文档流按钮</p>
+    <button class="btn" id="p-flow">普通文档流按钮</button>
+  </section>
+
+  <div class="spacer"></div>
+
+  <section>
+    <p class="c">case:scroll — 页面滚到此处再悬停（scrollY &gt; 0）</p>
+    <button class="btn" id="p-scroll">页面中部按钮</button>
+  </section>
+
+  <section>
+    <p class="c">case:inner — 内部滚动容器</p>
+    <div class="scroller" id="p-scroller">
+      <div class="row">row 01</div>
+      <div class="row">row 02</div>
+      <div class="row"><button class="btn" id="p-inner">容器内按钮</button></div>
+      <div class="row">row 03</div>
+      <div class="row">row 04</div>
+      <div class="row">row 05</div>
+    </div>
+  </section>
+
+  <section>
+    <p class="c">case:table — 表格单元格内的按钮（40 行 + 纵向滚动 + sticky 表头）</p>
+    <div class="tablewrap">
+      <table class="grid" id="p-table">
+        <thead><tr><th>#</th><th>名称</th><th>操作</th></tr></thead>
+        <tbody id="p-tbody">
+          <tr><td>1</td><td>标注目标行</td><td><button class="btn tiny" id="p-table-btn">行内按钮</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <p class="c">case:card / card-btn / card-input — 卡片与嵌套标注</p>
+    <div class="card" id="p-card">
+      <h3>卡片标题</h3>
+      <p>悬停卡片空白处应命中外层卡片；悬停卡片内按钮应命中内层按钮（嵌套取最内层）。</p>
+      <div class="field">
+        <label for="p-card-input">卡片内输入框</label>
+        <input class="text-input" id="p-card-input" type="text" placeholder="卡片内输入框">
+      </div>
+      <button class="btn" id="p-card-btn">卡片内按钮</button>
+    </div>
+  </section>
+
+  <section>
+    <p class="c">case:late — load 后 600ms 才注入的按钮</p>
+    <div id="p-late-host"><span class="c">（注入前：空白）</span></div>
+  </section>
+
+  <section>
+    <p class="c">case:rerender — innerHTML 重写后元素被替换</p>
+    <div id="p-rerender-host">
+      <button class="btn" id="p-rerender-btn">重渲染前按钮</button>
+    </div>
+    <p style="margin:12px 0 0"><button class="btn ghost" id="p-do-rerender">模拟重渲染</button></p>
+  </section>
+
+  <section>
+    <p class="c">case:disabled — 禁用态按钮 / case:pe-none — 父层 pointer-events:none</p>
+    <button class="btn" id="p-disabled-btn" disabled>禁用中的按钮</button>
+    <button class="btn ghost" id="p-toggle-disable">切换禁用态</button>
+    <p style="margin:16px 0 0"><span class="pe-none"><button class="btn" id="p-pe-btn">父层 pointer-events:none</button></span></p>
+  </section>
+
+  <section>
+    <p class="c">case:drawer — 抽屉（transform 滑入 + visibility，z-index 9999）</p>
+    <button class="btn" id="p-open-drawer">打开抽屉</button>
+  </section>
+
+  <section>
+    <p class="c">case:modal — 弹窗（display:none 切换，z-index 10000）</p>
+    <button class="btn" id="p-open-modal">打开弹窗</button>
+  </section>
+
+  <section>
+    <p class="c">case:collapse — 折叠面板（display:none 切换）</p>
+    <div class="collapse" id="p-collapse">
+      <button class="collapse-head" id="p-collapse-head">展开 / 收起面板</button>
+      <div class="collapse-panel"><button class="btn" id="p-collapse-btn">面板内按钮</button></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="c">case:fab — position:fixed 浮动按钮（右下角）</p>
+  </section>
+
+  <button class="btn fab" id="p-fab">FAB</button>
+
+  <aside class="drawer" id="p-drawer">
+    <h3 style="margin:0 0 12px;font-size:15px">抽屉</h3>
+    <div class="field">
+      <label for="p-drawer-input">抽屉内输入框</label>
+      <input class="text-input" id="p-drawer-input" type="text" placeholder="抽屉内输入框">
+    </div>
+    <button class="btn ghost" id="p-close-drawer">关闭</button>
+  </aside>
+
+  <div class="mask" id="p-mask"></div>
+  <div class="modal" id="p-modal">
+    <h3 style="margin:0 0 12px;font-size:15px">弹窗</h3>
+    <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted)">display:none 切换的弹窗。</p>
+    <button class="btn" id="p-modal-btn">弹窗内按钮</button>
+  </div>
+
+  <script>
+  /* 探针的业务行为：刻意只用原生 JS + 最常见的几种结构切换方式，
+     用来逼出框架在真实生成页面里会遇到的情形。 */
+  (function () {
+    var $ = function (id) { return document.getElementById(id); };
+    $('p-open-drawer').addEventListener('click', function () { $('p-drawer').classList.add('open'); });
+    $('p-close-drawer').addEventListener('click', function () { $('p-drawer').classList.remove('open'); });
+    $('p-open-modal').addEventListener('click', function () { $('p-modal').classList.add('open'); $('p-mask').classList.add('open'); });
+    $('p-mask').addEventListener('click', function () { $('p-modal').classList.remove('open'); $('p-mask').classList.remove('open'); });
+    $('p-collapse-head').addEventListener('click', function () { $('p-collapse').classList.toggle('open'); });
+    $('p-toggle-disable').addEventListener('click', function () { var b = $('p-disabled-btn'); b.disabled = !b.disabled; });
+    $('p-do-rerender').addEventListener('click', function () {
+      $('p-rerender-host').innerHTML = '<button class="btn" id="p-rerender-btn">重渲染后按钮（新元素）</button>';
+    });
+    var tb = $('p-tbody');
+    for (var i = 2; i <= 40; i++) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + i + '</td><td>数据行 ' + i + '</td><td><button class="btn tiny">操作</button></td>';
+      tb.appendChild(tr);
+    }
+    setTimeout(function () {
+      $('p-late-host').innerHTML = '<button class="btn" id="p-late-btn">延迟注入的按钮</button>';
+    }, 600);
+  })();
+  </script>
+  <!-- 机器可读规格清单：AI / 开发者照此实现真实页面；人类标注由它派生，二者不会漂移 -->
+  <script type="application/json" id="prototype-spec">
+{
+  "schema": "annotated-prototype/spec@1",
+  "title": "框架结构探针页",
+  "summary": "annotated-prototype 框架回归探针：15 类样式结构各一个可标注控件，用于验证热区命中、几何跟随、弹层层级与 DOM 变化下的重解析。",
+  "regions": [
+    {
+      "id": "probe",
+      "label": "结构探针",
+      "role": "mixed",
+      "desc": "每个控件的标注标题即它的 case 名"
+    }
+  ],
+  "apis": [
+    {
+      "id": "probe-flow",
+      "method": "GET",
+      "path": "/api/probe/flow",
+      "desc": "读取按钮初始状态"
+    },
+    {
+      "id": "probe-scroll",
+      "method": "GET",
+      "path": "/api/probe/scroll",
+      "desc": "读取当前滚动上下文"
+    },
+    {
+      "id": "probe-inner",
+      "method": "POST",
+      "path": "/api/probe/inner",
+      "desc": "上报容器滚动位置"
+    },
+    {
+      "id": "probe-table",
+      "method": "GET",
+      "path": "/api/probe/table",
+      "desc": "读取行内操作权限"
+    },
+    {
+      "id": "probe-card",
+      "method": "GET",
+      "path": "/api/probe/card",
+      "desc": "读取卡片数据"
+    },
+    {
+      "id": "probe-card-btn",
+      "method": "POST",
+      "path": "/api/probe/card/action",
+      "desc": "提交卡片内操作"
+    },
+    {
+      "id": "probe-card-input",
+      "method": "POST",
+      "path": "/api/probe/card/validate",
+      "desc": "失焦校验输入内容"
+    },
+    {
+      "id": "probe-late-btn",
+      "method": "GET",
+      "path": "/api/probe/late",
+      "desc": "读取延迟加载的数据"
+    },
+    {
+      "id": "probe-rerender-btn",
+      "method": "POST",
+      "path": "/api/probe/rerender",
+      "desc": "触发重新渲染"
+    },
+    {
+      "id": "probe-disabled-btn",
+      "method": "POST",
+      "path": "/api/probe/disabled",
+      "desc": "提交被禁用态保护的动作"
+    },
+    {
+      "id": "probe-pe-btn",
+      "method": "GET",
+      "path": "/api/probe/pe",
+      "desc": "读取只读区域数据"
+    },
+    {
+      "id": "probe-drawer-input",
+      "method": "POST",
+      "path": "/api/probe/drawer/validate",
+      "desc": "失焦校验抽屉内输入"
+    },
+    {
+      "id": "probe-modal-btn",
+      "method": "POST",
+      "path": "/api/probe/modal/confirm",
+      "desc": "提交弹窗确认"
+    },
+    {
+      "id": "probe-collapse-btn",
+      "method": "POST",
+      "path": "/api/probe/collapse/refresh",
+      "desc": "刷新面板内容"
+    },
+    {
+      "id": "probe-fab",
+      "method": "GET",
+      "path": "/api/probe/fab",
+      "desc": "读取浮动入口数据"
+    },
+    {
+      "id": "probe-table-rows",
+      "method": "GET",
+      "path": "/api/probe/table/rows",
+      "desc": "表格行数据"
+    }
+  ],
+  "controls": [
+    {
+      "selector": "#p-flow",
+      "kind": "button",
+      "label": "case:flow",
+      "title": "case:flow",
+      "required": false,
+      "notes": [
+        "普通文档流中的按钮，作为最基础的对照基准"
+      ],
+      "apis": [
+        "probe-flow"
+      ]
+    },
+    {
+      "selector": "#p-scroll",
+      "kind": "button",
+      "label": "case:scroll",
+      "title": "case:scroll",
+      "required": false,
+      "notes": [
+        "位于页面中部（上方有 1100px 占位），悬停时 scrollY > 0"
+      ],
+      "apis": [
+        "probe-scroll"
+      ]
+    },
+    {
+      "selector": "#p-inner",
+      "kind": "button",
+      "label": "case:inner",
+      "title": "case:inner",
+      "required": false,
+      "notes": [
+        "位于 height:220px、overflow-y:auto 的容器内，只产生容器内位移"
+      ],
+      "apis": [
+        "probe-inner"
+      ]
+    },
+    {
+      "selector": "#p-table-btn",
+      "kind": "button",
+      "label": "case:table",
+      "title": "case:table",
+      "required": false,
+      "notes": [
+        "位于 40 行表格的单元格内，表头 sticky，外层容器可纵向滚动"
+      ],
+      "apis": [
+        "probe-table"
+      ]
+    },
+    {
+      "selector": "#p-card",
+      "kind": "other",
+      "label": "case:card-outer",
+      "title": "case:card-outer",
+      "required": false,
+      "notes": [
+        "卡片整体作为热区，悬停卡片空白处应命中本热区"
+      ],
+      "apis": [
+        "probe-card"
+      ]
+    },
+    {
+      "selector": "#p-card-btn",
+      "kind": "button",
+      "label": "case:card-inner",
+      "title": "case:card-inner",
+      "required": false,
+      "notes": [
+        "嵌套在卡片热区内部，悬停按钮应命中最内层热区"
+      ],
+      "apis": [
+        "probe-card-btn"
+      ]
+    },
+    {
+      "selector": "#p-card-input",
+      "kind": "input",
+      "label": "case:card-input",
+      "title": "case:card-input",
+      "required": false,
+      "notes": [
+        "卡片内输入框，聚焦时边框高亮"
+      ],
+      "apis": [
+        "probe-card-input"
+      ]
+    },
+    {
+      "selector": "#p-late-btn",
+      "kind": "button",
+      "label": "case:late",
+      "title": "case:late",
+      "required": false,
+      "notes": [
+        "load 后 600ms 才注入 DOM，框架必须重新解析 selector"
+      ],
+      "apis": [
+        "probe-late-btn"
+      ]
+    },
+    {
+      "selector": "#p-rerender-btn",
+      "kind": "button",
+      "label": "case:rerender",
+      "title": "case:rerender",
+      "required": false,
+      "notes": [
+        "被 innerHTML 整体替换成新元素，旧引用已 isConnected=false"
+      ],
+      "apis": [
+        "probe-rerender-btn"
+      ]
+    },
+    {
+      "selector": "#p-disabled-btn",
+      "kind": "button",
+      "label": "case:disabled",
+      "title": "case:disabled",
+      "required": false,
+      "notes": [
+        "禁用态按钮（loading 置灰场景），仍必须能标注"
+      ],
+      "apis": [
+        "probe-disabled-btn"
+      ]
+    },
+    {
+      "selector": "#p-pe-btn",
+      "kind": "button",
+      "label": "case:pe-none",
+      "title": "case:pe-none",
+      "required": false,
+      "notes": [
+        "父层 pointer-events:none，事件目标会落在祖先上，仍需能标注"
+      ],
+      "apis": [
+        "probe-pe-btn"
+      ]
+    },
+    {
+      "selector": "#p-drawer-input",
+      "kind": "input",
+      "label": "case:drawer",
+      "title": "case:drawer",
+      "required": false,
+      "notes": [
+        "抽屉用 transform 滑入 + visibility 切换，固定定位 z-index 9999"
+      ],
+      "apis": [
+        "probe-drawer-input"
+      ]
+    },
+    {
+      "selector": "#p-modal-btn",
+      "kind": "button",
+      "label": "case:modal",
+      "title": "case:modal",
+      "required": false,
+      "notes": [
+        "弹窗用 display:none 切换（0 尺寸目标），z-index 10000"
+      ],
+      "apis": [
+        "probe-modal-btn"
+      ]
+    },
+    {
+      "selector": "#p-collapse-btn",
+      "kind": "button",
+      "label": "case:collapse",
+      "title": "case:collapse",
+      "required": false,
+      "notes": [
+        "折叠面板用 display:none 切换：收起时盒子尺寸为 0，展开后才可见"
+      ],
+      "apis": [
+        "probe-collapse-btn"
+      ]
+    },
+    {
+      "selector": "#p-fab",
+      "kind": "button",
+      "label": "case:fab",
+      "title": "case:fab",
+      "required": false,
+      "notes": [
+        "position:fixed 的浮动按钮，滚动时视口位置不变"
+      ],
+      "apis": [
+        "probe-fab"
+      ]
+    }
+  ],
+  "table": {
+    "selector": "#p-table",
+    "columns": [
+      {
+        "key": "idx",
+        "label": "#",
+        "align": "left",
+        "format": "text"
+      },
+      {
+        "key": "name",
+        "label": "名称",
+        "align": "left",
+        "format": "text"
+      },
+      {
+        "key": "action",
+        "label": "操作",
+        "align": "left",
+        "format": "text"
+      }
+    ],
+    "annotatedBy": [
+      "#p-table-btn"
+    ],
+    "dataApi": "probe-table-rows",
+    "pagination": {
+      "api": "probe-table-rows",
+      "pageParam": "page",
+      "serverSide": true
+    },
+    "rowSelection": {
+      "mode": "none",
+      "requiredBy": [],
+      "clearedOn": []
+    }
+  },
+  "mock": [
+    "全部数据与交互均为模拟；探针只验证标注能力，不代表任何业务"
+  ],
+  "openQuestions": []
+}
+  </script>
+
+</div>
+
+<svg id="lines"></svg>
+<div class="anno" id="annoBox"></div>
+
+<script>
+/* ============================================================
+   热区配置（AI 生成时填充）
+   ============================================================ */
+const hotspots = [
+    {
+    id: "p-flow",
+    selector: "#p-flow",
+    title: "case:flow",
+    items: [
+      { type: "front", text: "普通文档流中的按钮，作为最基础的对照基准" },
+      { type: "back", text: "GET /api/probe/flow —— 读取按钮初始状态" }
+    ],
+  },
+  {
+    id: "p-scroll",
+    selector: "#p-scroll",
+    title: "case:scroll",
+    items: [
+      { type: "front", text: "位于页面中部（上方有 1100px 占位），悬停时 scrollY > 0" },
+      { type: "back", text: "GET /api/probe/scroll —— 读取当前滚动上下文" }
+    ],
+  },
+  {
+    id: "p-inner",
+    selector: "#p-inner",
+    title: "case:inner",
+    items: [
+      { type: "front", text: "位于 height:220px、overflow-y:auto 的容器内，只产生容器内位移" },
+      { type: "back", text: "POST /api/probe/inner —— 上报容器滚动位置" }
+    ],
+  },
+  {
+    id: "p-table-btn",
+    selector: "#p-table-btn",
+    title: "case:table",
+    items: [
+      { type: "front", text: "位于 40 行表格的单元格内，表头 sticky，外层容器可纵向滚动" },
+      { type: "back", text: "GET /api/probe/table —— 读取行内操作权限" }
+    ],
+  },
+  {
+    id: "p-card",
+    selector: "#p-card",
+    title: "case:card-outer",
+    items: [
+      { type: "front", text: "卡片整体作为热区，悬停卡片空白处应命中本热区" },
+      { type: "back", text: "GET /api/probe/card —— 读取卡片数据" }
+    ],
+  },
+  {
+    id: "p-card-btn",
+    selector: "#p-card-btn",
+    title: "case:card-inner",
+    items: [
+      { type: "front", text: "嵌套在卡片热区内部，悬停按钮应命中最内层热区" },
+      { type: "back", text: "POST /api/probe/card/action —— 提交卡片内操作" }
+    ],
+  },
+  {
+    id: "p-card-input",
+    selector: "#p-card-input",
+    title: "case:card-input",
+    items: [
+      { type: "front", text: "卡片内输入框，聚焦时边框高亮" },
+      { type: "back", text: "POST /api/probe/card/validate —— 失焦校验输入内容" }
+    ],
+  },
+  {
+    id: "p-late-btn",
+    selector: "#p-late-btn",
+    title: "case:late",
+    items: [
+      { type: "front", text: "load 后 600ms 才注入 DOM，框架必须重新解析 selector" },
+      { type: "back", text: "GET /api/probe/late —— 读取延迟加载的数据" }
+    ],
+  },
+  {
+    id: "p-rerender-btn",
+    selector: "#p-rerender-btn",
+    title: "case:rerender",
+    items: [
+      { type: "front", text: "被 innerHTML 整体替换成新元素，旧引用已 isConnected=false" },
+      { type: "back", text: "POST /api/probe/rerender —— 触发重新渲染" }
+    ],
+  },
+  {
+    id: "p-disabled-btn",
+    selector: "#p-disabled-btn",
+    title: "case:disabled",
+    items: [
+      { type: "front", text: "禁用态按钮（loading 置灰场景），仍必须能标注" },
+      { type: "back", text: "POST /api/probe/disabled —— 提交被禁用态保护的动作" }
+    ],
+  },
+  {
+    id: "p-pe-btn",
+    selector: "#p-pe-btn",
+    title: "case:pe-none",
+    items: [
+      { type: "front", text: "父层 pointer-events:none，事件目标会落在祖先上，仍需能标注" },
+      { type: "back", text: "GET /api/probe/pe —— 读取只读区域数据" }
+    ],
+  },
+  {
+    id: "p-drawer-input",
+    selector: "#p-drawer-input",
+    title: "case:drawer",
+    items: [
+      { type: "front", text: "抽屉用 transform 滑入 + visibility 切换，固定定位 z-index 9999" },
+      { type: "back", text: "POST /api/probe/drawer/validate —— 失焦校验抽屉内输入" }
+    ],
+  },
+  {
+    id: "p-modal-btn",
+    selector: "#p-modal-btn",
+    title: "case:modal",
+    items: [
+      { type: "front", text: "弹窗用 display:none 切换（0 尺寸目标），z-index 10000" },
+      { type: "back", text: "POST /api/probe/modal/confirm —— 提交弹窗确认" }
+    ],
+  },
+  {
+    id: "p-collapse-btn",
+    selector: "#p-collapse-btn",
+    title: "case:collapse",
+    items: [
+      { type: "front", text: "折叠面板用 display:none 切换：收起时盒子尺寸为 0，展开后才可见" },
+      { type: "back", text: "POST /api/probe/collapse/refresh —— 刷新面板内容" }
+    ],
+  },
+  {
+    id: "p-fab",
+    selector: "#p-fab",
+    title: "case:fab",
+    items: [
+      { type: "front", text: "position:fixed 的浮动按钮，滚动时视口位置不变" },
+      { type: "back", text: "GET /api/probe/fab —— 读取浮动入口数据" }
+    ],
+  },
+];
+
+const annoBox = document.getElementById('annoBox');
+const svg = document.getElementById('lines');
+const toggle = document.getElementById('toggle');
+
+let enabled = false;
+const hotspotEls = {};
+let hovered = null;
+let frameNo = 0;
+
+/* 悬停判定不依赖 DOM 事件的目标元素，而是「指针坐标 + 矩形包含 + 遮挡校验」。
+   这样延迟注入的元素、被 innerHTML 换掉的元素、父层 pointer-events:none 的
+   控件、禁用态控件都能命中；被弹层遮住的控件则不会被误命中。
+   且指针不动时页面滚动 / 布局变化（展开折叠面板等）也会实时重判。 */
+const pointer = { x: -1, y: -1, active: false };
+
+/* ============================================================
+   1. 建热区元素
+   ============================================================ */
+hotspots.forEach(h => {
+  const el = document.createElement('div');
+  el.className = 'hotspot';
+  document.body.appendChild(el);
+  hotspotEls[h.id] = el;
+  h._el = el;
+});
+
+/* ============================================================
+   2. 目标解析：只缓存「仍挂在文档里」的引用，失效就按 selector 重查
+   ============================================================ */
+const ro = new ResizeObserver(() => repositionAll());
+
+function targetOf(h){
+  if (h._target && h._target.isConnected) return h._target;
+  h._target = null;
+  const missAt = typeof h._missAt === 'number' ? h._missAt : -999;
+  if (frameNo - missAt < 12) return null;   // 未命中时限频重试，避免每帧 querySelector
+  h._missAt = frameNo;
+  const t = document.querySelector(h.selector);
+  if (t) { h._target = t; ro.observe(t); }
+  return h._target;
+}
+
+function depthOf(el){
+  let d = 0, p = el;
+  while ((p = p.parentElement)) d++;
+  return d;
+}
+
+/* 指针下方的热区：先按矩形圈定候选，再用 elementFromPoint 排除被遮挡的，
+   最后对嵌套热区取最内层 */
+function pickAt(x, y){
+  const top = document.elementFromPoint(x, y);
+  let best = null, bestDepth = -1;
+
+  for (let i = 0; i < hotspots.length; i++){
+    const h = hotspots[i];
+    const t = targetOf(h);
+    if (!t) continue;
+    const r = t.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+    if (top && !(t.contains(top) || top.contains(t))) continue;
+    const d = depthOf(t);
+    if (d > bestDepth) { best = h; bestDepth = d; }
+  }
+  return best;
+}
+
+/* ============================================================
+   3. 统一重定位入口
+   ============================================================ */
+function repositionAll(){
+  hotspots.forEach(h => {
+    const t = targetOf(h);
+    const el = h._el;
+    if (!t) {
+      el.style.opacity = '0';
+      el._hidden = true;
+      return;
+    }
+    const r = t.getBoundingClientRect();
+
+    if (r.width === 0 && r.height === 0) {
+      el.style.opacity = '0';
+      el._hidden = true;
+      return;
+    }
+    el._hidden = false;
+    /* 目标重新可见时必须回清行内 opacity：
+       行内样式优先级高于 .hotspot.active{opacity:1}，不回清红框会永久不可见 */
+    if (el.style.opacity === '0') el.style.opacity = '';
+
+    el.style.left   = (r.left - 4) + 'px';
+    el.style.top    = (r.top  - 4) + 'px';
+    el.style.width  = (r.width  + 8) + 'px';
+    el.style.height = (r.height + 8) + 'px';
+  });
+
+  if (annoBox._current) {
+    const target = annoBox._current._target;
+    if (!target || !target.isConnected) { hide(); return; }
+    const r = target.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) { hide(); return; }
+    positionAnno(annoBox._current);
+    drawLine(annoBox._current);
+  }
+}
+
+/* ============================================================
+   4. 事件驱动
+   ============================================================ */
+window.addEventListener('resize', repositionAll);
+window.addEventListener('scroll', repositionAll, true);
+
+let _moPending = false;
+const mo = new MutationObserver(() => {
+  hotspots.forEach(h => { if (!h._target) h._missAt = -999; });   // DOM 变了，允许立刻重查
+  if (_moPending) return;
+  _moPending = true;
+  requestAnimationFrame(() => {
+    _moPending = false;
+    repositionAll();
+  });
+});
+mo.observe(document.body, {
+  childList: true,
+  subtree: true,
+  attributes: true,
+  attributeFilter: ['class', 'style', 'hidden', 'open']
+});
+
+document.addEventListener('pointermove', e => {
+  pointer.x = e.clientX; pointer.y = e.clientY; pointer.active = true;
+}, true);
+document.documentElement.addEventListener('mouseleave', () => { pointer.active = false; });
+document.addEventListener('pointercancel', () => { pointer.active = false; }, true);
+window.addEventListener('blur', () => { pointer.active = false; });
+
+/* body 上的 transform / filter / contain 会把叠加层的包含块从视口改到 body，
+   坐标系随之变化；这里一次性告警，避免静默错位 */
+(function warnContainingBlock(){
+  const keys = ['transform', 'filter', 'perspective', 'contain', 'willChange'];
+  const hit = keys.filter(k => {
+    const v = getComputedStyle(document.body)[k];
+    return v && v !== 'none' && v !== 'auto' && v !== 'normal';
+  });
+  if (hit.length) console.warn('标注框架告警：body 上的 ' + hit.join(' / ') + ' 会成为叠加层的包含块，标注可能错位');
+})();
+
+/* ============================================================
+   5. 逐帧重定位 + 悬停重判（兜底：动画、过渡、指针不动时的滚动与布局变化）
+   ============================================================ */
+let _lastKey = '';
+function tick(){
+  frameNo++;
+
+  /* 跑满约 2 秒仍未命中的 selector 一次性告警：
+     延迟注入的元素会在这里之前被解析到，所以告警留下的就是真拼错的 selector */
+  if (frameNo === 120) {
+    hotspots.forEach(h => {
+      if (!h._target) console.warn('热区 selector 未命中：', h.selector);
+    });
+  }
+
+  let key = '';
+  for (let i = 0; i < hotspots.length; i++){
+    const t = targetOf(hotspots[i]);
+    if (!t) { key += '-|'; continue; }
+    const r = t.getBoundingClientRect();
+    key += Math.round(r.left) + ',' + Math.round(r.top) + ','
+         + Math.round(r.width) + ',' + Math.round(r.height) + '|';
+  }
+  if (key !== _lastKey) {
+    _lastKey = key;
+    repositionAll();
+  }
+
+  reconcileHover();
+  requestAnimationFrame(tick);
+}
+
+function reconcileHover(){
+  if (!enabled) return;
+  const h = pointer.active ? pickAt(pointer.x, pointer.y) : null;
+  if (h === hovered) return;
+  hovered = h;
+  if (h) show(h, h._el);
+  else hide();
+}
+
+requestAnimationFrame(tick);
+
+/* ============================================================
+   6. 显示 / 隐藏
+   ============================================================ */
+function show(h, el){
+  Object.values(hotspotEls).forEach(e => e.classList.remove('active'));
+  if (el.style.opacity === '0') el.style.opacity = '';
+  el.classList.add('active');
+
+  annoBox.innerHTML =
+    `<div class="head"><span class="dot"></span><h4>${h.title || ''}</h4></div>
+     <div class="body">` +
+     (h.items || []).map(it =>
+       `<div class="item ${it.type}">` +
+          `<span class="tag">${it.type==='back'?'后端':'前端'}</span>` +
+          `<span class="txt">${it.text || ''}</span>` +
+        `</div>`).join('') +
+     `</div>`;
+
+  annoBox.classList.add('show');
+  annoBox._current = h;
+
+  positionAnno(h);
+  requestAnimationFrame(() => drawLine(h));
+}
+
+function hide(){
+  hovered = null;
+  annoBox.classList.remove('show');
+  Object.values(hotspotEls).forEach(e => e.classList.remove('active'));
+  svg.innerHTML = '';
+  annoBox._current = null;
+}
+
+/* ============================================================
+   7. 标注框定位（自动避让视口）
+   ============================================================ */
+function positionAnno(h){
+  const r = h._el.getBoundingClientRect();
+  const gap = 28, pad = 16;
+  const w = annoBox.offsetWidth;
+  const ht = annoBox.offsetHeight;
+
+  let x, y, side;
+  if (r.right + gap + w <= innerWidth - pad) {
+    side = 'right';
+    x = r.right + gap;
+    y = r.top + r.height/2 - ht/2;
+  } else if (r.left - gap - w >= pad) {
+    side = 'left';
+    x = r.left - gap - w;
+    y = r.top + r.height/2 - ht/2;
+  } else {
+    side = 'bottom';
+    x = r.left + r.width/2 - w/2;
+    y = r.bottom + gap;
+  }
+
+  x = Math.max(pad, Math.min(x, innerWidth  - w  - pad));
+  y = Math.max(pad, Math.min(y, innerHeight - ht - pad));
+
+  annoBox.style.left = x + 'px';
+  annoBox.style.top  = y + 'px';
+  annoBox._rect = { x, y, w, h: ht, side };
+}
+
+/* ============================================================
+   8. 引线绘制
+   ============================================================ */
+function drawLine(h){
+  const r = h._el.getBoundingClientRect();
+  const a = annoBox._rect;
+  if (!a) return;
+  const ns = 'http://www.w3.org/2000/svg';
+
+  let p1, p2;
+  if (a.side === 'right') {
+    p1 = { x: r.right, y: r.top + r.height/2 };
+    p2 = { x: a.x,     y: a.y + a.h/2 };
+  } else if (a.side === 'left') {
+    p1 = { x: r.left,    y: r.top + r.height/2 };
+    p2 = { x: a.x + a.w, y: a.y + a.h/2 };
+  } else {
+    p1 = { x: r.left + r.width/2, y: r.bottom };
+    p2 = { x: a.x + a.w/2,        y: a.y };
+  }
+
+  let d;
+  if (a.side === 'bottom') {
+    const midY = (p1.y + p2.y) / 2;
+    d = `M ${p1.x} ${p1.y} L ${p1.x} ${midY} L ${p2.x} ${midY} L ${p2.x} ${p2.y}`;
+  } else {
+    const midX = (p1.x + p2.x) / 2;
+    d = `M ${p1.x} ${p1.y} L ${midX} ${p1.y} L ${midX} ${p2.y} L ${p2.x} ${p2.y}`;
+  }
+
+  const defs = document.createElementNS(ns,'defs');
+  defs.innerHTML = `<linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#e5484d" stop-opacity="0.35"/>
+    <stop offset="100%" stop-color="#e5484d" stop-opacity="1"/></linearGradient>`;
+
+  const path = document.createElementNS(ns,'path');
+  path.setAttribute('d', d);
+  path.setAttribute('stroke','url(#lg)');
+  path.setAttribute('stroke-width','1.75');
+  path.setAttribute('fill','none');
+  path.setAttribute('stroke-linejoin','round');
+  path.setAttribute('stroke-linecap','round');
+
+  const halo = document.createElementNS(ns,'circle');
+  halo.setAttribute('cx',p1.x); halo.setAttribute('cy',p1.y); halo.setAttribute('r','8');
+  halo.setAttribute('fill','rgba(229,72,77,.15)');
+
+  const dot = document.createElementNS(ns,'circle');
+  dot.setAttribute('cx',p1.x); dot.setAttribute('cy',p1.y); dot.setAttribute('r','4');
+  dot.setAttribute('fill','#e5484d'); dot.setAttribute('stroke','#fff'); dot.setAttribute('stroke-width','1.5');
+
+  const dot2 = document.createElementNS(ns,'circle');
+  dot2.setAttribute('cx',p2.x); dot2.setAttribute('cy',p2.y); dot2.setAttribute('r','3');
+  dot2.setAttribute('fill','#e5484d');
+
+  svg.innerHTML = '';
+  [defs,path,halo,dot,dot2].forEach(n => svg.appendChild(n));
+
+  if (!h._drawn) {
+    const len = path.getTotalLength();
+    path.style.strokeDasharray = len;
+    path.style.strokeDashoffset = len;
+    path.getBoundingClientRect();
+    path.style.transition = 'stroke-dashoffset .28s ease';
+    path.style.strokeDashoffset = 0;
+    h._drawn = true;
+  }
+}
+
+/* ============================================================
+   9. 开关
+   ============================================================ */
+toggle.addEventListener('click', () => {
+  enabled = !enabled;
+  toggle.classList.toggle('on', enabled);
+  toggle.lastChild.textContent = enabled ? '标注已开启' : '标注已关闭';
+  if (!enabled) hide();
+});
+</script>
+</body>
+</html>
