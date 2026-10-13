@@ -127,7 +127,7 @@ node <skill>/tests/read-spec.mjs 原型页.html --json   # 输出原始 JSON（�
 ## 回归门禁（`node tests/run.mjs` 自动查）
 
 - 清单存在、是合法 JSON、`schema` 版本正确
-- schema 校验全过：`kind` 白名单、`apis[].path` 必须 `/api/` 开头且无真实域名、引用完整性（`apis[]` / `table.dataApi` / `table.pagination.api` / `table.annotatedBy` 指向的 id 都必须存在）
+- schema 校验全过：`kind` 白名单、`apis[].path` 必须 `/api/` 或 `/<服务名>/api/` 开头（如 `/log-viewer/api/v1/…`）且无真实域名、引用完整性（`apis[]` / `table.dataApi` / `table.pagination.api` / `table.annotatedBy` 指向的 id 都必须存在）
 - **清单 ↔ 人类标注双向一致**：没有任何控件只出现在一边
 - 每个热区都有**非空且唯一的 id**（框架以它为映射表键；缺了会静默累积 active 类）
 - **表格列定义与页面真实表头逐一对齐**（顺序 + 文案）

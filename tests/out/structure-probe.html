@@ -360,7 +360,7 @@
     {
       "id": "probe-table",
       "method": "GET",
-      "path": "/api/probe/table",
+      "path": "/log-viewer/api/v1/probe/table",
       "desc": "读取行内操作权限"
     },
     {
@@ -432,7 +432,7 @@
     {
       "id": "probe-table-rows",
       "method": "GET",
-      "path": "/api/probe/table/rows",
+      "path": "/log-viewer/api/v1/probe/table/rows",
       "desc": "表格行数据"
     }
   ],
@@ -720,7 +720,7 @@ const hotspots = [
     title: "case:table",
     items: [
       { type: "front", text: "位于 40 行表格的单元格内，表头 sticky，外层容器可纵向滚动" },
-      { type: "back", text: "GET /api/probe/table —— 读取行内操作权限" }
+      { type: "back", text: "GET /log-viewer/api/v1/probe/table —— 读取行内操作权限" }
     ],
   },
   {

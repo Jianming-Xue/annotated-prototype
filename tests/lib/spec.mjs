@@ -11,6 +11,12 @@
 
 export const SPEC_SCHEMA = 'annotated-prototype/spec@1';
 
+/**
+ * 接口路径占位规范：`/api/…` 或 `/<服务名>/api/…`（服务名小写字母开头、可含数字与连字符，
+ * 如 `/log-viewer/api/v1/…`、`/security-management/api/v1/…` —— nginx 按路径首段分发）。
+ */
+export const API_PATH_RE = /^\/(?:api\/|[a-z][a-z0-9-]*\/api\/)/;
+
 /** 控件类型白名单。kind 决定实现侧该用什么组件。 */
 export const CONTROL_KINDS = [
   'select', 'input', 'textarea', 'button', 'radio', 'checkbox',
@@ -40,8 +46,8 @@ export function validateSpec(spec) {
     if (a.status !== undefined && !['confirmed', 'proposed'].includes(a.status)) {
       errs.push(`api ${a.id} 的 status 非法：${a.status}（可选 confirmed | proposed）`);
     }
-    if (typeof a.path !== 'string' || !a.path.startsWith('/api/')) {
-      errs.push(`api ${a.id} 的 path 必须以 /api/ 开头（占位规范），当前 ${JSON.stringify(a.path)}`);
+    if (typeof a.path !== 'string' || !API_PATH_RE.test(a.path)) {
+      errs.push(`api ${a.id} 的 path 必须以 /api/ 或 /<服务名>/api/ 开头（占位规范，如 /log-viewer/api/v1/…），当前 ${JSON.stringify(a.path)}`);
     }
     if (/^https?:/i.test(a.path || '')) errs.push(`api ${a.id} 的 path 含真实域名`);
   }
@@ -107,7 +113,7 @@ export function validateSpec(spec) {
   for (const c of controls) {
     for (const text of [...(c.notes || []), ...(c.apiNotes || []), ...(c.rules || []), ...Object.values(c.on || {}).flat()]) {
       for (const m of String(text).matchAll(/(?:^|[^:\w])(\/[A-Za-z0-9_][\w\-./{}]*)/g)) {
-        if (!m[1].startsWith('/api/')) errs.push(`控件 ${c.selector} 的文案里出现非 /api/ 路径：${m[1]}`);
+        if (!API_PATH_RE.test(m[1])) errs.push(`控件 ${c.selector} 的文案里出现非占位路径（须 /api/ 或 /<服务名>/api/ 开头）：${m[1]}`);
         else referenced.add(m[1]);
       }
     }

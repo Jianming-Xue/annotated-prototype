@@ -7,7 +7,7 @@
  */
 import fs from 'node:fs';
 import { FRAME_PATH, TOKENS, readFrame, assertProductMatchesFrame, SPEC_ELEMENT_ID } from './build.mjs';
-import { validateSpec, SPEC_SCHEMA, CONTROL_KINDS } from './spec.mjs';
+import { validateSpec, SPEC_SCHEMA, CONTROL_KINDS, API_PATH_RE } from './spec.mjs';
 
 /** 从页面里读出内嵌规格清单（AI / 开发者读的就是这一份）。 */
 export function readSpec(html) {
@@ -286,20 +286,20 @@ export function checkPrototype(html, { expectProduct = null, framePath = FRAME_P
     const nb = (obj.match(/type\s*:\s*["']back["']/g) || []).length;
     add(`热区 ${label} 含前端条目与后端条目`, nf >= 1 && nb >= 1, `front=${nf} back=${nb}`);
 
-    // 后端条目：不得含真实域名；出现的接口路径一律要是 /api/ 占位。
-    // 注意「不调接口」的纯前端控件（如行选择）没有路径是合法的 —— 所以不强制本热区必须有 /api/。
+    // 后端条目：不得含真实域名；出现的接口路径一律要是 /api/ 或 /<服务名>/api/ 占位。
+    // 注意「不调接口」的纯前端控件（如行选择）没有路径是合法的 —— 所以不强制本热区必须有接口路径。
     if (nb >= 1) {
       const backTexts = [...obj.matchAll(/type\s*:\s*["']back["']\s*,\s*text\s*:\s*(["'])([\s\S]*?)\1/g)].map(m => m[2]);
       const withDomain = backTexts.filter(t => /https?:\/\//.test(t));
       const offApi = [...new Set(
         backTexts.flatMap(t => [...t.matchAll(/(?:^|[^:\w])(\/[A-Za-z0-9_][\w\-./{}]*)/g)].map(m => m[1]))
-          .filter(p => !p.startsWith('/api/'))
+          .filter(p => !API_PATH_RE.test(p))
       )];
-      add(`热区 ${label} 接口路径均用 /api/xxx 占位、无真实域名`,
+      add(`热区 ${label} 接口路径均用 /api/xxx 或 /<服务名>/api/xxx 占位、无真实域名`,
         withDomain.length === 0 && offApi.length === 0,
         [
           withDomain.length ? `含真实域名：${withDomain.join(' | ')}` : '',
-          offApi.length ? `非 /api/ 路径：${offApi.join(' ')}` : '',
+          offApi.length ? `非占位路径：${offApi.join(' ')}` : '',
           (!withDomain.length && !offApi.length && !backTexts.some(t => t.includes('/api/'))) ? '纯前端控件，不调接口' : '',
         ].filter(Boolean).join('；') || '');
     }

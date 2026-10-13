@@ -220,7 +220,7 @@ export const PROBE = [
 
   { id: 'table', sel: '#p-table-btn', caseName: 'case:table',
     front: '位于 40 行表格的单元格内，表头 sticky，外层容器可纵向滚动',
-    back: 'GET /api/probe/table 读取行内操作权限',
+    back: 'GET /log-viewer/api/v1/probe/table 读取行内操作权限',
     setup: async (page) => page.evaluate(() => document.getElementById('p-table-btn').scrollIntoView({ block: 'center' })) },
 
   { id: 'card', sel: '#p-card', caseName: 'case:card-outer',
@@ -288,7 +288,7 @@ const TABLE_API_ID = 'probe-table-rows';
 
 /** 从 back 文案解析接口，作为 apis 声明的唯一来源（避免两处手抄） */
 function parseApi(text, id) {
-  const m = text.match(/^(GET|POST|PUT|PATCH|DELETE)\s+(\/api\/[^\s]+)(?:\s+(.*))?$/);
+  const m = text.match(/^(GET|POST|PUT|PATCH|DELETE)\s+(\/(?:[a-z][a-z0-9-]*\/)?api\/[^\s]+)(?:\s+(.*))?$/);
   if (!m) throw new Error(`探针 ${id} 的 back 文案不符合「METHOD /api/path 说明」：${text}`);
   return { id: apiId({ id }), method: m[1], path: m[2], desc: (m[3] || '').trim() };
 }
@@ -307,7 +307,7 @@ export const spec = {
   ],
   apis: [
     ...PROBE.map(p => parseApi(p.back, p.id)),
-    { id: TABLE_API_ID, method: 'GET', path: '/api/probe/table/rows', desc: '表格行数据' },
+    { id: TABLE_API_ID, method: 'GET', path: '/log-viewer/api/v1/probe/table/rows', desc: '表格行数据' },
   ],
   controls: PROBE.map(p => ({
     selector: p.sel,
